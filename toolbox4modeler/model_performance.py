@@ -37,6 +37,37 @@ def rmse(o, p, axis=0):
 
 
 
+def mae(o, p, axis=0):
+    """
+    Calculate the mean absolute error (MAE).
+    
+    References:
+        
+    Parameters:
+        o : array_like
+            Observed variate.
+
+        p : array_like
+            Predicted variate.
+            
+        axis : int, optional
+            Axis to be averaged. Default: 0.
+
+    Returns:
+        rmse : float
+            Root mean squared error of the input variates.
+
+    Raises:
+            
+    """
+        
+    # Calculation
+    mae = np.mean(np.abs(p-o), axis=axis)
+    
+    return mae
+
+
+
 def wia1981(o, p, axis=0):
     """
     Calculate the Willmott's Index of Agreement (Willmott, 1981).
