@@ -6,7 +6,7 @@ import numpy as np
 
 
 
-def disper_1st(w, h, g=9.80665):
+def disper_1st(h, T, g=9.80665):
     """
     Description:
         Calculate wave number k from the first order dispersion relation, 
@@ -15,40 +15,44 @@ def disper_1st(w, h, g=9.80665):
     References:
         
     Parameters:
-        w : float
-            Angular frequency [s^-1].
-
         h : float
             Water depth [m].
+
+        T : float
+            Wave peroid [s].
 
         g : float, optional
             Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
 
     Returns:
-        k : float
-            Wave number [m^-1].   
+        L : float
+            Wave length [m].   
 
     Raises:
             
     """
     from scipy.optimize import least_squares
     
+    # Preparation
+    w = 2*np.pi/T
+    
     # least-squares function
     def fun_disper(k):
-        w0 = np.sqrt(g*k*np.tanh(k*h))
-        return (w0 - w)
+        r = np.sqrt(g*k*np.tanh(k*h)) - w
+        return r
     
     # Initial guess
     k0 = w**2/(g*np.sqrt(np.tanh(w**2*h/g)))
     
     # Calculation
     res_lsq = least_squares(fun_disper, k0).x
+    L = 2*np.pi/res_lsq[0]
     
-    return res_lsq[0]
+    return L
 
 
 
-def disper_5th(w, h, H, g=9.80665):
+def disper_5th(h, T, H, g=9.80665):
     """
     Description:
         Calculate wave number k from the fifth order dispersion relation, 
@@ -60,11 +64,11 @@ def disper_5th(w, h, H, g=9.80665):
         Sciences, 478(2258), 20210732. https://doi.org/10.1098/rspa.2021.0732
         
     Parameters:
-        w : float
-            Angular frequency [s^-1].
-
         h : float
             Water depth [m].
+
+        T : float
+            Wave peroid [s].
 
         H : float
             Wave height [m].
@@ -73,14 +77,17 @@ def disper_5th(w, h, H, g=9.80665):
             Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
 
     Returns:
-        k : float
-            Wave number [m^-1].   
+        L : float
+            Wave length [m].   
 
     Raises:
             
     """
     from scipy.optimize import least_squares
     
+    # Preparation
+    w = 2*np.pi/T
+
     # least-squares function
     def fun_disper(x):
         k = x[0]
@@ -106,10 +113,10 @@ def disper_5th(w, h, H, g=9.80665):
     
     # Calculation
     res_lsq = least_squares(fun_disper, np.array([k0, a0])).x
-    k = res_lsq[0]
+    L = 2*np.pi/res_lsq[0]
     a = res_lsq[1]
     
-    return k, a
+    return L, a
 
 
 
