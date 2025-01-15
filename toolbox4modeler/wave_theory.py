@@ -6,74 +6,110 @@ import numpy as np
 
 
 
-def disper(w, h, g=9.80665, tol=1e-9, maxiter=100):
+def disper_1st(w, h, g=9.80665):
     """
-    Calculate wave number k from the first order dispersion relation, 
-    w^2 = gk tanh(kh), using Newton's method.
+    Description:
+        Calculate wave number k from the first order dispersion relation, 
+        w^2 = gk tanh(kh).
     
+    References:
+        
     Parameters:
-        w : array_like
+        w : float
             Angular frequency [s^-1].
 
-        h : float or array_like
-            Water depth [m]. Can be a floating-point number or an array with 
-            the same size as w.
+        h : float
+            Water depth [m].
 
         g : float, optional
             Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
 
-        tol : float, optional
-            Tolerance [m] for termination. Default: 1e-9.
-
-        maxiter : int, optional
-            Maximum number of iterations [-]. Default: 100.
-
     Returns:
-        k : ndarray
-            Wave number [m^-1]. An array with the same size as w.      
+        k : float
+            Wave number [m^-1].   
 
     Raises:
-        ValueError
-            Input arrays w and h have different size.
             
     """
+    from scipy.optimize import least_squares
     
-    # Preparation
-    w, h = np.array(w), np.array(h)
-    w_shp = w.shape
-    w, h = w.flatten(), h.flatten()
-    k = np.empty(w.shape)
-    k[:] = np.nan
+    # least-squares function
+    def fun_disper(k):
+        w0 = np.sqrt(g*k*np.tanh(k*h))
+        return (w0 - w)
     
-    # Check inputs
-    if len(w) != len(h):
-        if len(h) == 1:
-            h = h * np.ones(w.shape)
-        else:
-            raise ValueError('Sizes of w and h do not match.')
+    # Initial guess
+    k0 = w**2/(g*np.sqrt(np.tanh(w**2*h/g)))
+    
+    # Calculation
+    res_lsq = least_squares(fun_disper, k0).x
+    
+    return res_lsq[0]
 
-    # Loop through all w
-    for i in range(len(w)):
-        wi = w[i]
-        hi = h[i]
-        # Solve k using Newton's method
-        if wi == 0:
-            k[i] = 0
-        else:
-            err = 1
-            ct = 0
-            ki0 = wi**2/(g*np.sqrt(np.tanh(wi**2*hi/g))) # Initial guess
-            while err > tol and ct < maxiter:
-                f = wi**2 - g*ki0*np.tanh(ki0*hi)
-                df = -g*np.tanh(ki0*hi) - g*ki0*hi/np.cosh(ki0*hi)**2
-                ki = ki0 - f / df
-                err = abs(ki - ki0)
-                ct += 1
-                ki0 = ki
-            k[i] = ki
-    k = np.reshape(k, w_shp)
+
+
+def disper_5th(w, h, H, g=9.80665):
+    """
+    Description:
+        Calculate wave number k from the fifth order dispersion relation, 
+        w^2 = gk tanh(kh) (1 + k^2 a^2 w2 + k^4 a^4 w4)^2
     
-    return k
+    References:
+        Zhao, K., & Liu, P. L.-F. (2022). On Stokes wave solutions. Proceedings
+        of the Royal Society A: Mathematical, Physical and Engineering 
+        Sciences, 478(2258), 20210732. https://doi.org/10.1098/rspa.2021.0732
+        
+    Parameters:
+        w : float
+            Angular frequency [s^-1].
+
+        h : float
+            Water depth [m].
+
+        H : float
+            Wave height [m].
+            
+        g : float, optional
+            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
+
+    Returns:
+        k : float
+            Wave number [m^-1].   
+
+    Raises:
+            
+    """
+    from scipy.optimize import least_squares
+    
+    # least-squares function
+    def fun_disper(x):
+        k = x[0]
+        a = x[1]
+        r = np.zeros(2)
+        sgm = np.tanh(k*h)
+        a1 = np.cosh(2*k*h)
+        w0 = np.sqrt(g*k*sgm)
+        w2 = (2*a1**2 + 7)/(4*(a1 - 1)**2)
+        w4 = (20*a1**5 + 112*a1**4 - 100*a1**3 - 68*a1**2 - 211*a1 + 328)/(32*(a1 - 1)**5)
+        B31 = (3 + 8*sgm**2 - 9*sgm**4)/(16*sgm**4)
+        B33 = (27 - 9*sgm**2 + 9*sgm**4 - 3*sgm**6)/(64*sgm**6)
+        B51 = (121*a1**5 + 263*a1**4 + 376*a1**3 - 1999*a1**2 + 2509*a1 - 1108)/(192*(a1 - 1)**5)
+        B53 = 9*(57*a1**7 + 204*a1**6 - 53*a1**5 - 782*a1**4 - 741*a1**3 - 52*a1**2 + 371*a1 + 186)/(128*(3*a1 + 2)*(a1 - 1)**6)
+        B55 = 5*(300*a1**8 + 1579*a1**7 + 3176*a1**6 + 2949*a1**5 + 1188*a1**4 + 675*a1**3 + 1326*a1**2 + 827*a1 + 130)/(384*(12*a1**2 + 11*a1 + 2)*(a1 - 1)**6)
+        r[0] = w0 + w0*(k*a)**2*w2 + w0*(k*a)**4*w4 - w
+        r[1] = 2*a + 2*a*(B31 + B33)*(k*a)**2 + 2*a**(B51 + B53 + B55)*(k*a)**4 - H        
+        return r
+
+    # Initial guess
+    k0 = w**2/(g*np.sqrt(np.tanh(w**2*h/g)))
+    a0 = H/2
+    
+    # Calculation
+    res_lsq = least_squares(fun_disper, np.array([k0, a0])).x
+    k = res_lsq[0]
+    a = res_lsq[1]
+    
+    return k, a
 
 
 
