@@ -9,7 +9,7 @@ import numpy as np
 def disper_1st(h, T, g=9.80665):
     """
     Description:
-        Calculate wave number k from the first order dispersion relation, 
+        Calculate the wave length L from the first order dispersion relation, 
         w^2 = gk tanh(kh).
     
     References:
@@ -55,7 +55,7 @@ def disper_1st(h, T, g=9.80665):
 def disper_5th(h, T, H, g=9.80665):
     """
     Description:
-        Calculate wave number k from the fifth order dispersion relation, 
+        Calculate the wave length L from the fifth order dispersion relation, 
         w^2 = gk tanh(kh) (1 + k^2 a^2 w2 + k^4 a^4 w4)^2
     
     References:
@@ -79,6 +79,9 @@ def disper_5th(h, T, H, g=9.80665):
     Returns:
         L : float
             Wave length [m].   
+
+        a : float
+            Wave amplitude [m].   
 
     Raises:
             
@@ -120,20 +123,86 @@ def disper_5th(h, T, H, g=9.80665):
 
 
 
-def cnoidal_wave(h, H, T, t, x=0., g=9.80665, tol=1e-9):
+def cnoidal_wave_parm(h, T, H, g=9.80665):
     """
-    Calculate the surface elevation time series of a cnoidal wave, using the 
-    approximation of decimals method.
+    Description:
+        Calculate the wave length L and other cnoidal wave related parameters 
+        based on the Benjamin–Bona–Mahony equation (BBM equation).
     
+    References:
+        
     Parameters:
         h : float
             Water depth [m].
 
+        T : float
+            Wave peroid [s].
+
         H : float
             Wave height [m].
+            
+        g : float, optional
+            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
+
+    Returns:
+        L : float
+            Wave length [m].
+
+        c : float
+            Wave celerity [m s^-1].
+            
+        m : float
+            Elliptic parameter [-].
+                        
+        K : float
+            Complete elliptic integral of the first kind [-].
+                         
+        E : float
+            Complete elliptic integral of the second kind [-].           
+
+    Raises:
+            
+    """
+    from scipy import special
+    from scipy.optimize import least_squares
+
+    # least-squares function
+    def fun_cn(m):
+        K = special.ellipk(m)
+        E = special.ellipe(m)
+        c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
+        L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
+        r = L - c*T
+        return r
+    
+    # Calculation
+    res_lsq = least_squares(fun_cn, 0.9).x
+    m = res_lsq[0]
+    K = special.ellipk(m)
+    E = special.ellipe(m)
+    c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
+    L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
+    
+    return L, c, m, K, E
+
+
+
+def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
+    """
+    Description:
+        Calculate the surface elevation time series of a cnoidal wave.
+    
+    References:
+        
+    Parameters:
+        h : float
+            Water depth [m].
 
         T : float
-            Wave period [s].
+            Wave peroid [s].
+
+        H : float
+            Wave height [m].
 
         t : array_like
             Desired output time [s].            
@@ -144,54 +213,24 @@ def cnoidal_wave(h, H, T, t, x=0., g=9.80665, tol=1e-9):
         g : float, optional
             Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
 
-        tol : float, optional
-            Tolerance [-] for termination. Default: 1e-9.
-
     Returns:
-        wl : ndarray
-            Time series of the surface elevation  [m]. An array with the same 
-            size as t.      
-
-        L : float
-            Wave length [m].
-
-        c : float
-            Wave celerity [m/s].
-            
-        m: float
-            Elliptic parameter [-].
+        eta : ndarray
+            Time series of the surface elevation [m]. An array with the same 
+            size as t.
 
     Raises:
             
     """
     from scipy import special
     
-    # Approximate m to the desired tolerence
-    m0 = 0.5
-    dm = 0.1
-    m = np.arange(m0, 1+dm/10, dm)
-    while dm >= tol:
-        K = special.ellipk(m)
-        E = special.ellipe(m)
-        c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
-        L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
-        err = L-c*T;
-        m0 = m[err<0]
-        dm = dm/10
-        m = np.arange(m0[-1], m0[-1]+dm*10.1, dm)
-    idx = np.argmin(np.abs(err))
-    K = K[idx]
-    E = E[idx]
-    L = L[idx]
-    c = c[idx]
-    m = m[idx]
+    # Preparation
+    L, c, m, K, E = cnoidal_wave_parm(h, T, H, g=9.80665)
     
-    # Calculate time series
-    wl2 = H/m*(1-m-E/K)
+    # Calculation
     _, cn, _, _ = special.ellipj(2*K*(x-c*t)/L, m)
-    wl = wl2 + H*cn**2
+    eta = H/m*(1-m-E/K) + H*cn**2
     
-    return wl, L, c, m
+    return eta
 
 
 
