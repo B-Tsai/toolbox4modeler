@@ -78,10 +78,10 @@ def disper_5th(h, T, H, g=9.80665):
 
     Returns:
         L : float
-            Wave length [m].   
+            Wave length [m].
 
         a : float
-            Wave amplitude [m].   
+            Wave amplitude [m].
 
     Raises:
             
@@ -207,7 +207,7 @@ def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
         t : array_like
             Desired output time [s].            
 
-        x : float
+        x : float, optional
             Desired output location [m]. Default: 0.
  
         g : float, optional
@@ -224,7 +224,7 @@ def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
     from scipy import special
     
     # Preparation
-    L, c, m, K, E = cnoidal_wave_parm(h, T, H, g=9.80665)
+    L, c, m, K, E = cnoidal_wave_parm(h, T, H, g)
     
     # Calculation
     _, cn, _, _ = special.ellipj(2*K*(x-c*t)/L, m)
@@ -234,38 +234,84 @@ def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
 
 
 
-def fifth_stokes_wave(h, a, T, g=9.80665):
+def fifth_stokes_wave(h, T, H, t, x=0., g=9.80665):
     """
-    Calculate the wave component of a 5th order Stokes wave.
+    Description:
+        Calculate the surface elevation time series of the fifth order Stokes
+        wave.
     
+    References:
+        Zhao, K., & Liu, P. L.-F. (2022). On Stokes wave solutions. Proceedings
+        of the Royal Society A: Mathematical, Physical and Engineering 
+        Sciences, 478(2258), 20210732. https://doi.org/10.1098/rspa.2021.0732
+        
     Parameters:
         h : float
             Water depth [m].
 
-        a : float
-            Wave amplitude [m].
-
         T : float
-            Wave period [s].
- 
+            Wave peroid [s].
+
+        H : float
+            Wave height [m].
+            
+        t : array_like
+            Desired output time [s].            
+
+        x : float, optional
+            Desired output location [m]. Default: 0.
+            
         g : float, optional
             Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
 
     Returns:
-        wl : ndarray
-            Time series of the surface elevation  [m]. An array with the same 
-            size as t.      
+        eta : ndarray
+            Time series of the surface elevation [m]. An array with the same 
+            size as t. 
 
-        L : float
-            Wave length [m].
-
-        c : float
-            Wave celerity [m/s].
+        ai : ndarray
+            Wave amplitude of the five harmonics [m].        
+        
+        k : float
+            Wave number [m^-1]. 
             
-        m: float
-            Elliptic parameter [-].
-
+        w : float
+            Angular frequency [s^-1].
+            
     Raises:
             
     """
     
+    # Preparation
+    L, a = disper_5th(h, T, H, g)
+    k = 2*np.pi/L
+    w = 2*np.pi/T
+    tht = k*x - w*t
+    
+    # Calculation
+    sgm = np.tanh(k*h)
+    a1  = np.cosh(2*k*h)
+    B31 = (3 + 8*sgm**2 - 9*sgm**4)/(16*sgm**4)
+    B51 = (121*a1**5 + 263*a1**4 + 376*a1**3 - 1999*a1**2 + 2509*a1 - 1108)/(192*(a1 - 1)**5)
+    B22 = (3 - sgm**2)/(4*sgm**3)
+    B42 = (60*a1**6 + 232*a1**5 - 118*a1**4 - 989*a1**3 - 607*a1**2 + 352*a1 + 260)/(24*(3*a1 + 2)*(a1 - 1)**4*np.sinh(2*k*h))
+    B33 = (27 - 9*sgm**2 + 9*sgm**4 - 3*sgm**6)/(64*sgm**6)
+    B53 = 9*(57*a1**7 + 204*a1**6 - 53*a1**5 - 782*a1**4 - 741*a1**3 - 52*a1**2 + 371*a1 + 186)/(128*(3*a1 + 2)*(a1 - 1)**6)
+    B44 = (24*a1**6 + 116*a1**5 + 214*a1**4 + 188*a1**3 + 133*a1**2 + 101*a1 + 34)/(24*(3*a1 + 2)*(a1 - 1)**4*np.sinh(2*k*h))
+    B55 = 5*(300*a1**8 + 1579*a1**7 + 3176*a1**6 + 2949*a1**5 + 1188*a1**4 + 675*a1**3 + 1326*a1**2 + 827*a1 + 130)/(384*(12*a1**2 + 11*a1 + 2)*(a1 - 1)**6)    
+    
+    ai = np.zeros(5)
+    ai[0] = a*(k*a)**0*(  1 + (k*a)**2*B31 + (k*a)**4*B51)
+    ai[1] = a*(k*a)**1*(B22 + (k*a)**2*B42)
+    ai[2] = a*(k*a)**2*(B33 + (k*a)**2*B53)
+    ai[3] = a*(k*a)**3*(B44)
+    ai[4] = a*(k*a)**4*(B55)
+    
+    eta = (ai[0]*np.cos(1*tht)
+         + ai[1]*np.cos(2*tht)
+         + ai[2]*np.cos(3*tht)
+         + ai[3]*np.cos(4*tht)
+         + ai[4]*np.cos(5*tht))
+        
+    return eta, ai, k, w
+
