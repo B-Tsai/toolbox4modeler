@@ -218,6 +218,12 @@ def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
             Time series of the surface elevation [m]. An array with the same 
             size as t.
 
+        k : float
+            Wave number [m^-1]. 
+            
+        w : float
+            Angular frequency [s^-1].
+            
     Raises:
             
     """
@@ -225,12 +231,14 @@ def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
     
     # Preparation
     L, c, m, K, E = cnoidal_wave_parm(h, T, H, g)
+    k = 2*np.pi/L
+    w = 2*np.pi/T
     
     # Calculation
     _, cn, _, _ = special.ellipj(2*K*(x-c*t)/L, m)
     eta = H/m*(1-m-E/K) + H*cn**2
     
-    return eta
+    return eta, k, w
 
 
 
