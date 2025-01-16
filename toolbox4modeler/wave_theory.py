@@ -1,8 +1,101 @@
 """
-Functions for general use
+Functions related to wave theory
 
 """
 import numpy as np
+
+
+
+def wave_cat(h, T, H, g=9.80665):
+    """
+    Description:
+        Categorize wave type
+    
+    References:
+        
+    Parameters:
+        h : float
+            Water depth [m].
+
+        T : float
+            Wave peroid [s].
+
+        H : float
+            Wave height [m].
+            
+        g : float, optional
+            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
+
+    Returns:
+        wd : str
+            Water depth condition.
+        
+        wb : str
+            Wave breaking condition.
+        
+        wy : str
+            Wave type.
+            
+    Raises:
+            
+    """
+
+    # Preparation
+    def fun_L(L0):
+        if H*L0**2/h**3 > 26:
+            L, _, _, _, _ = cnoidal_wave_parm(h, T, H, g)
+        else:
+            L, _ = disper_5th(h, T, H, g)
+            
+        return L
+    
+    err = 1
+    ct = 0
+    L0 = disper_1st(h, T, g) # Initial guess
+    while err > 10**-8 and ct < 100:
+        L = fun_L(L0)
+        err = abs(L - L0)
+        ct += 1
+        L0 = L
+    if ct > 99:
+        L, _ = disper_5th(h, T, H, g)
+        print("Number of iteration reaches 100, wave type undetermined.")
+
+    k = 2*np.pi/L
+    
+    # Wave conditions
+    if k*h > np.pi:
+        wd = "deep water"
+        if H/L > 0.14:
+            wb = "yes"
+        else:
+            wb = "no"
+    elif k*h < np.pi/10:
+        wd = "shallow water"
+        if H/h > 0.8:
+            wb = "yes"
+        else:
+            wb = "no"
+    else:
+        wd = "intermediate water depth"
+        if H/h > 0.8:
+            wb = "yes"
+        else:
+            wb = "no"
+            
+    # Wave type
+    if ct > 99:
+        wt = "Undetermined"
+    elif H*L**2/h**3 > 26:
+        wt = "Cnoidal wave"
+    else:
+        wt = "Stokes wave"
+    
+    print("Water depth   : " + wd)
+    print("Wave breaking : " + wb)
+    print("Wave type     : " + wt)
+
+    return wd, wb, wt
 
 
 
@@ -123,125 +216,6 @@ def disper_5th(h, T, H, g=9.80665):
 
 
 
-def cnoidal_wave_parm(h, T, H, g=9.80665):
-    """
-    Description:
-        Calculate the wave length L and other cnoidal wave related parameters 
-        based on the Benjamin–Bona–Mahony equation (BBM equation).
-    
-    References:
-        
-    Parameters:
-        h : float
-            Water depth [m].
-
-        T : float
-            Wave peroid [s].
-
-        H : float
-            Wave height [m].
-            
-        g : float, optional
-            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
-
-    Returns:
-        L : float
-            Wave length [m].
-
-        c : float
-            Wave celerity [m s^-1].
-            
-        m : float
-            Elliptic parameter [-].
-                        
-        K : float
-            Complete elliptic integral of the first kind [-].
-                         
-        E : float
-            Complete elliptic integral of the second kind [-].           
-
-    Raises:
-            
-    """
-    from scipy import special
-    from scipy.optimize import least_squares
-
-    # least-squares function
-    def fun_cn(m):
-        K = special.ellipk(m)
-        E = special.ellipe(m)
-        c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
-        L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
-        r = L - c*T
-        return r
-    
-    # Calculation
-    res_lsq = least_squares(fun_cn, 0.9).x
-    m = res_lsq[0]
-    K = special.ellipk(m)
-    E = special.ellipe(m)
-    c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
-    L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
-    
-    return L, c, m, K, E
-
-
-
-def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
-    """
-    Description:
-        Calculate the surface elevation time series of a cnoidal wave.
-    
-    References:
-        
-    Parameters:
-        h : float
-            Water depth [m].
-
-        T : float
-            Wave peroid [s].
-
-        H : float
-            Wave height [m].
-
-        t : array_like
-            Desired output time [s].            
-
-        x : float, optional
-            Desired output location [m]. Default: 0.
- 
-        g : float, optional
-            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
-
-    Returns:
-        eta : ndarray
-            Time series of the surface elevation [m]. An array with the same 
-            size as t.
-
-        k : float
-            Wave number [m^-1]. 
-            
-        w : float
-            Angular frequency [s^-1].
-            
-    Raises:
-            
-    """
-    from scipy import special
-    
-    # Preparation
-    L, c, m, K, E = cnoidal_wave_parm(h, T, H, g)
-    k = 2*np.pi/L
-    w = 2*np.pi/T
-    
-    # Calculation
-    _, cn, _, _ = special.ellipj(2*K*(x-c*t)/L, m)
-    eta = H/m*(1-m-E/K) + H*cn**2
-    
-    return eta, k, w
-
-
-
 def fifth_stokes_wave(h, T, H, t, x=0., g=9.80665):
     """
     Description:
@@ -322,4 +296,125 @@ def fifth_stokes_wave(h, T, H, t, x=0., g=9.80665):
          + ai[4]*np.cos(5*tht))
         
     return eta, ai, k, w
+
+
+
+def cnoidal_wave_parm(h, T, H, g=9.80665):
+    """
+    Description:
+        Calculate the wave length L and other cnoidal wave related parameters 
+        based on the Benjamin–Bona–Mahony equation (BBM equation).
+    
+    References:
+        
+    Parameters:
+        h : float
+            Water depth [m].
+
+        T : float
+            Wave peroid [s].
+
+        H : float
+            Wave height [m].
+            
+        g : float, optional
+            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
+
+    Returns:
+        L : float
+            Wave length [m].
+
+        c : float
+            Wave celerity [m s^-1].
+            
+        m : float
+            Elliptic parameter [-].
+                        
+        K : float
+            Complete elliptic integral of the first kind [-].
+                         
+        E : float
+            Complete elliptic integral of the second kind [-].           
+
+    Raises:
+            
+    """
+    from scipy import special
+    from scipy.optimize import least_squares
+
+    # least-squares function
+    def fun_cn(m):
+        K = special.ellipk(m)
+        E = special.ellipe(m)
+        c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
+        L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
+        r = L - c*T
+        return r
+    
+    # Calculation
+    res_lsq = least_squares(fun_cn, 0.9).x
+    m = res_lsq[0]
+    K = special.ellipk(m)
+    E = special.ellipe(m)
+    c = np.sqrt(g*h)*(1+H/(m*h)*(1-m/2-3/2*E/K))
+    L = h*np.sqrt(16/3*m*h/H*c/np.sqrt(g*h))*K
+    
+    return L, c, m, K, E
+
+
+
+def cnoidal_wave(h, T, H, t, x=0., g=9.80665):
+    """
+    Description:
+        Calculate the surface elevation time series of the cnoidal wave.
+    
+    References:
+        
+    Parameters:
+        h : float
+            Water depth [m].
+
+        T : float
+            Wave peroid [s].
+
+        H : float
+            Wave height [m].
+
+        t : array_like
+            Desired output time [s].            
+
+        x : float, optional
+            Desired output location [m]. Default: 0.
+ 
+        g : float, optional
+            Acceleration of gravity [m^2 s^-2]. Default: 9.80665.
+
+    Returns:
+        eta : ndarray
+            Time series of the surface elevation [m]. An array with the same 
+            size as t.
+
+        k : float
+            Wave number [m^-1]. 
+            
+        w : float
+            Angular frequency [s^-1].
+            
+    Raises:
+            
+    """
+    from scipy import special
+    
+    # Preparation
+    L, c, m, K, E = cnoidal_wave_parm(h, T, H, g)
+    k = 2*np.pi/L
+    w = 2*np.pi/T
+    
+    # Calculation
+    _, cn, _, _ = special.ellipj(2*K*(x-c*t)/L, m)
+    eta = H/m*(1-m-E/K) + H*cn**2
+    
+    return eta, k, w
+
+
 
