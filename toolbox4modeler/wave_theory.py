@@ -40,7 +40,7 @@ def wave_cat(h, T, H, g=9.80665):
             
     """
 
-    # Preparation
+    # Determine wave length
     def fun_L(L0):
         if H*L0**2/h**3 > 26:
             L, _, _, _, _ = cnoidal_wave_parm(h, T, H, g)
@@ -352,7 +352,8 @@ def cnoidal_wave_parm(h, T, H, g=9.80665):
         return r
     
     # Calculation
-    res_lsq = least_squares(fun_cn, 0.9).x
+    m0 = 0.9 # Initial guess
+    res_lsq = least_squares(fun_cn, m0).x
     m = res_lsq[0]
     K = special.ellipk(m)
     E = special.ellipe(m)
