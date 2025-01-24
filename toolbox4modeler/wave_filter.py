@@ -43,12 +43,20 @@ def wave_no_filt(h, wl, dt, dx=0):
     Raises:
             
     """ 
-    from toolbox4modeler import wave
+    from toolbox4modeler import wave_theory
     
     # Preparation
     n = len(wl)
     w = 2*np.pi/dt*np.arange(n)/n
-    k = wave.disper(w, h)
+    k = np.empty(w.shape)
+    ct = 0
+    for iw in w:
+        if iw == 0:
+            k[ct] = 0
+        else:
+            T = 2*np.pi/iw
+            k[ct] = 2*np.pi/wave_theory.disper_1st(h, T)
+        ct += 1
     
     # Calculation
     y = np.fft.fft(wl)
@@ -104,12 +112,20 @@ def wave_filt_1d_multi_wg(x, h, wl, dt, x0=0):
     Raises:
             
     """
-    from toolbox4modeler import wave
+    from toolbox4modeler import wave_theory
         
     # Preparation
     n = len(wl)
     w = 2*np.pi/dt*np.arange(n)/n
-    k = wave.disper(w, h)
+    k = np.empty(w.shape)
+    ct = 0
+    for iw in w:
+        if iw == 0:
+            k[ct] = 0
+        else:
+            T = 2*np.pi/iw
+            k[ct] = 2*np.pi/wave_theory.disper_1st(h, T)
+        ct += 1
     
     # Calculation
     y = np.fft.fft(wl, axis=0)
