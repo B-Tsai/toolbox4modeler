@@ -6,6 +6,7 @@ setup(
     description='Python pre- and post-processing toolbox for multiple numerical models',
     url='https://github.com/B-Tsai/toolbox4modeler',
     author='Benjamin Tsai',
+    author_email='benjamin.tsai@oregonstate.edu',
     license='GNU General Public License v3.0',
     packages=['toolbox4modeler']
     )
