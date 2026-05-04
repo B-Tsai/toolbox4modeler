@@ -1,0 +1,65 @@
+{
+    "__types__": {
+        "scalar": {"components": 1, "suffixes": []},
+        "vector": {"components": 3, "suffixes": ["x", "y", "z"]},
+        "symmTensor": {"components": 6, "suffixes": ["xx", "xy", "xz", "yy", "yz", "zz"]},
+        "tensor": {"components": 9, "suffixes": ["xx", "xy", "xz", "yx", "yy", "yz", "zx", "zy", "zz"]},
+        "sphericalTensor": {"components": 1, "suffixes": ["ii"]},
+        "bool": {"components": 1, "suffixes": []}
+    },
+    "alpha.water": {
+        "standard_name": "sea_water_volume_fraction",
+        "units": "1",
+        "openfoam_type": "scalar"
+    },
+    "p": {
+        "standard_name": "sea_water_pressure",
+        "units": "Pa",
+        "openfoam_type": "scalar"
+    },
+    "p_rgh": {
+        "standard_name": "sea_water_dynamic_pressure",
+        "units": "Pa",
+        "openfoam_type": "scalar"
+    },
+    "k": {
+        "standard_name": "specific_turbulent_kinetic_energy_of_sea_water",
+        "units": "m2 s-2",
+        "openfoam_type": "scalar"
+    },
+    "omega": {
+        "standard_name": "specific_turbulent_dissipation_rate",
+        "units": "s-1",
+        "openfoam_type": "scalar"
+    },
+    "epsilon": {
+        "standard_name": "specific_turbulent_kinetic_energy_dissipation_in_sea_water",
+        "units": "m2 s-3",
+        "openfoam_type": "scalar"
+    },
+    "nut": {
+        "standard_name": "kinematic_eddy_viscosity",
+        "units": "m2 s-1",
+        "openfoam_type": "scalar"
+    },
+    "nuTilda": {
+        "standard_name": "modified_turbulent_viscosity",
+        "units": "m2 s-1",
+        "openfoam_type": "scalar"
+    },
+    "U": {
+        "standard_name": "sea_water_velocity",
+        "units": "m s-1",
+        "openfoam_type": "vector",
+        "components": {
+            "x": {"standard_name": "x_sea_water_velocity"},
+            "y": {"standard_name": "y_sea_water_velocity"},
+            "z": {"standard_name": "upward_sea_water_velocity"}
+        }
+    },
+    "R": {
+        "standard_name": "reynolds_stress_tensor",
+        "units": "m2 s-2",
+        "openfoam_type": "symmTensor"
+    }
+}
