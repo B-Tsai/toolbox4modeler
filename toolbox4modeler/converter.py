@@ -65,7 +65,7 @@ def _process_openfoam_time_step(foam_file_path, t_idx, t_val, var_shapes, var_su
 
 def openfoam_to_netcdf(
     case_dir: str,
-    output_dir: str,
+    output_dir: Optional[str] = None,
     variables: List[str],
     include_boundaries: bool = False,
     max_workers: Optional[int] = None
@@ -88,6 +88,12 @@ def openfoam_to_netcdf(
     """
     case_path = Path(case_dir)
     foam_file = case_path / "openfoam.foam"
+    
+    if output_dir is None:
+        output_dir = str(case_path / "postProcessing" / "nc")
+        
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
     
     if not foam_file.exists():
         foam_file.touch()
@@ -288,8 +294,6 @@ def openfoam_to_netcdf(
     has_bnd = bnd_connectivity is not None
     p_names = patch_names if "patch_names" in locals() else []
     
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
     import netCDF4 as nc
 
     processed_time_indices = set(range(len(time_values)))
@@ -325,7 +329,8 @@ def openfoam_to_netcdf(
                     ds[data_var].values[:] = np.nan
                     
             print(f"Initializing {var_nc}...")
-            ds.to_netcdf(str(var_nc), engine='netcdf4')
+            encoding = {v: {'zlib': True, 'complevel': 4} for v in ds.data_vars}
+            ds.to_netcdf(str(var_nc), engine='netcdf4', encoding=encoding)
             processed_time_indices = set()
 
     time_indices_to_process = [i for i in range(len(time_values)) if i not in processed_time_indices]
