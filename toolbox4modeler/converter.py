@@ -3,14 +3,72 @@ import numpy as np
 import xarray as xr
 import pyvista as pv
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+import concurrent.futures
+import multiprocessing
+
+def _process_openfoam_time_step(foam_file_path, t_idx, t_val, var_shapes, var_suffixes, patch_names, has_bnd):
+    import pyvista as pv
+    import numpy as np
+    
+    reader = pv.OpenFOAMReader(foam_file_path)
+    reader.set_active_time_value(t_val)
+    mesh = reader.read()
+    internal_mesh = mesh["internalMesh"]
+    
+    t_data = {}
+    
+    for var, n_comp in var_shapes.items():
+        t_data[var] = {}
+        if var in internal_mesh.cell_data:
+            field = internal_mesh.cell_data[var]
+            suffixes = var_suffixes[var]
+            if not suffixes:
+                if len(field.shape) > 1 and field.shape[1] == 1:
+                    t_data[var]['_'] = field[:, 0]
+                else:
+                    t_data[var]['_'] = field
+            else:
+                for i, suf in enumerate(suffixes):
+                    if len(field.shape) == 1:
+                        t_data[var][suf] = field
+                    else:
+                        t_data[var][suf] = field[:, i]
+                        
+        if has_bnd and "boundary" in mesh.keys():
+            boundary_blocks = mesh["boundary"]
+            bnd_values = []
+            for patch_name in patch_names:
+                patch_mesh = boundary_blocks[patch_name]
+                if var in patch_mesh.cell_data:
+                    bnd_values.append(patch_mesh.cell_data[var])
+                else:
+                    if n_comp == 1:
+                        bnd_values.append(np.full(patch_mesh.n_cells, np.nan))
+                    else:
+                        bnd_values.append(np.full((patch_mesh.n_cells, n_comp), np.nan))
+                        
+            bnd_values_array = np.vstack(bnd_values) if n_comp > 1 else np.concatenate(bnd_values)
+            
+            suffixes = var_suffixes[var]
+            if not suffixes:
+                t_data[var]['_bnd'] = bnd_values_array
+            else:
+                for i, suf in enumerate(suffixes):
+                    if bnd_values_array.ndim == 1:
+                        t_data[var][f'_bnd_{suf}'] = bnd_values_array
+                    else:
+                        t_data[var][f'_bnd_{suf}'] = bnd_values_array[:, i]
+                        
+    return t_idx, t_data
 
 
 def openfoam_to_netcdf(
     case_dir: str,
     output_dir: str,
     variables: List[str],
-    include_boundaries: bool = False
+    include_boundaries: bool = False,
+    max_workers: Optional[int] = None
 ) -> dict:
     """
     Reads 3D OpenFOAM data and converts it into CF and UGRID compliant NetCDF files.
@@ -225,72 +283,131 @@ def openfoam_to_netcdf(
                 if bnd_connectivity is not None:
                     ds[f'{var}_bnd_{suf}'] = (('time', 'bnd_face'), np.zeros((len(time_values), bnd_faces), dtype=np.float32), suf_bnd_attrs)
 
-    for t_idx, t_val in enumerate(time_values):
-        reader.set_active_time_value(t_val)
-        mesh = reader.read()
-        internal_mesh = mesh["internalMesh"]
-        
-        for var, n_comp in var_shapes.items():
-            ds = datasets[var]
-            if var in internal_mesh.cell_data:
-                field = internal_mesh.cell_data[var]
-                suffixes = get_suffixes(var, n_comp)
-                if not suffixes:
-                    if len(field.shape) > 1 and field.shape[1] == 1:
-                        ds[var][t_idx, :] = field[:, 0]
-                    else:
-                        ds[var][t_idx, :] = field
-                else:
-                    for i, suf in enumerate(suffixes):
-                        if len(field.shape) == 1:
-                            ds[f'{var}_{suf}'][t_idx, :] = field
-                        else:
-                            ds[f'{var}_{suf}'][t_idx, :] = field[:, i]
-                    
-        if bnd_connectivity is not None and "boundary" in mesh.keys():
-            boundary_blocks = mesh["boundary"]
-            for var, n_comp in var_shapes.items():
-                ds = datasets[var]
-                bnd_values = []
-                for patch_name in patch_names:
-                    patch_mesh = boundary_blocks[patch_name]
-                    if var in patch_mesh.cell_data:
-                        bnd_values.append(patch_mesh.cell_data[var])
-                    else:
-                        if n_comp == 1:
-                            bnd_values.append(np.full(patch_mesh.n_cells, np.nan))
-                        else:
-                            bnd_values.append(np.full((patch_mesh.n_cells, n_comp), np.nan))
-                            
-                bnd_values_array = np.vstack(bnd_values) if n_comp > 1 else np.concatenate(bnd_values)
-                
-                suffixes = get_suffixes(var, n_comp)
-                if not suffixes:
-                    ds[f'{var}_bnd'][t_idx, :] = bnd_values_array
-                else:
-                    for i, suf in enumerate(suffixes):
-                        if bnd_values_array.ndim == 1:
-                            ds[f'{var}_bnd_{suf}'][t_idx, :] = bnd_values_array
-                        else:
-                            ds[f'{var}_bnd_{suf}'][t_idx, :] = bnd_values_array[:, i]
-                    
-        if total_to_process := len(time_values):
-            milestone = max(1, total_to_process // 10)
-            if (t_idx + 1) % milestone == 0:
-                percent = int(((t_idx + 1) / total_to_process) * 100)
-                print(f"  -> Progress: {percent}%")
-            
+    var_suffixes = {var: get_suffixes(var, n_comp) for var, n_comp in var_shapes.items()}
+    foam_file_str = str(foam_file)
+    has_bnd = bnd_connectivity is not None
+    p_names = patch_names if "patch_names" in locals() else []
+    
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-    
+    import netCDF4 as nc
+
+    processed_time_indices = set(range(len(time_values)))
+
     for var, ds in datasets.items():
-        ds.attrs['Conventions'] = 'CF-1.8 UGRID-1.0'
-        ds.attrs['title'] = f'OpenFOAM 3D Volume and Boundary Data: {var}'
-        ds.attrs['source'] = 'Generated by toolbox4modeler'
-        
         var_nc = out_path / f"{var}.nc"
-        print(f"Saving {var} to {var_nc}...")
-        ds.to_netcdf(str(var_nc), engine='netcdf4')
+        is_valid = False
+        if var_nc.exists():
+            try:
+                with nc.Dataset(var_nc, 'r') as f:
+                    if 'time_step_processed' in f.variables:
+                        processed = f.variables['time_step_processed'][:]
+                        var_processed_indices = set(np.where(processed == 1)[0])
+                        processed_time_indices = processed_time_indices.intersection(var_processed_indices)
+                        is_valid = True
+                    else:
+                        is_valid = False
+            except Exception:
+                is_valid = False
+                
+        if not is_valid:
+            if var_nc.exists():
+                print(f"File {var_nc} is corrupted or missing tracking metadata. Recreating...")
+                var_nc.unlink()
+                
+            ds.attrs['Conventions'] = 'CF-1.8 UGRID-1.0'
+            ds.attrs['title'] = f'OpenFOAM 3D Volume and Boundary Data: {var}'
+            ds.attrs['source'] = 'Generated by toolbox4modeler'
+            ds['time_step_processed'] = (('time',), np.zeros(len(time_values), dtype=np.int32))
+            
+            for data_var in ds.data_vars:
+                if 'time' in ds[data_var].dims and data_var != 'time_step_processed':
+                    ds[data_var].values[:] = np.nan
+                    
+            print(f"Initializing {var_nc}...")
+            ds.to_netcdf(str(var_nc), engine='netcdf4')
+            processed_time_indices = set()
+
+    time_indices_to_process = [i for i in range(len(time_values)) if i not in processed_time_indices]
+    
+    if len(time_indices_to_process) == 0:
+        print("All time steps already processed. Hot start completed.")
+    else:
+        if max_workers is None:
+            max_workers = max(1, int(multiprocessing.cpu_count() * 0.8))
+            
+        print(f"Processing {len(time_indices_to_process)} time steps using {max_workers} workers...")
         
+        args_list = [
+            (foam_file_str, t_idx, time_values[t_idx], var_shapes, var_suffixes, p_names, has_bnd)
+            for t_idx in time_indices_to_process
+        ]
+        
+        open_nc_files = {var: nc.Dataset(out_path / f"{var}.nc", 'r+') for var in var_shapes.keys()}
+        
+        try:
+            import time
+            from datetime import timedelta
+            start_time = time.time()
+            last_print_time = start_time
+            variables_str = ", ".join(var_shapes.keys())
+
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(_process_openfoam_time_step, *args): args[1] for args in args_list}
+                
+                total_to_process = len(time_indices_to_process)
+                
+                processed_count = 0
+                for future in concurrent.futures.as_completed(futures):
+                    t_idx, t_data = future.result()
+                    
+                    for var in var_shapes.keys():
+                        f = open_nc_files[var]
+                        if var in t_data:
+                            var_t_data = t_data[var]
+                            suffixes = var_suffixes[var]
+                            if not suffixes:
+                                if '_' in var_t_data:
+                                    f.variables[var][t_idx, :] = var_t_data['_']
+                            else:
+                                for suf in suffixes:
+                                    if suf in var_t_data:
+                                        f.variables[f'{var}_{suf}'][t_idx, :] = var_t_data[suf]
+                                        
+                        if has_bnd:
+                            suffixes = var_suffixes[var]
+                            if not suffixes:
+                                if '_bnd' in t_data.get(var, {}):
+                                    f.variables[f'{var}_bnd'][t_idx, :] = t_data[var]['_bnd']
+                            else:
+                                for suf in suffixes:
+                                    bnd_key = f'_bnd_{suf}'
+                                    if bnd_key in t_data.get(var, {}):
+                                        f.variables[f'{var}_bnd_{suf}'][t_idx, :] = t_data[var][bnd_key]
+                                        
+                        f.variables['time_step_processed'][t_idx] = 1
+                        f.sync()
+                        
+                    processed_count += 1
+                    current_time = time.time()
+                    if current_time - last_print_time >= 30 or processed_count == total_to_process or processed_count == 1:
+                        percent = (processed_count / total_to_process) * 100
+                        elapsed = current_time - start_time
+                        time_per_step = elapsed / processed_count
+                        remaining_steps = total_to_process - processed_count
+                        eta_seconds = remaining_steps * time_per_step
+                        eta_str = str(timedelta(seconds=int(eta_seconds)))
+                        
+                        t_val_str = f"{time_values[t_idx]:.4g}"
+                        print(f"[{percent:.1f}%] Completed time={t_val_str}s (vars: {variables_str}) | ETA: {eta_str}")
+                        last_print_time = current_time
+        finally:
+            for f in open_nc_files.values():
+                f.close()
+            
     print("Success!")
-    return datasets
+    final_datasets = {}
+    for var in var_shapes.keys():
+        var_nc = out_path / f"{var}.nc"
+        final_datasets[var] = xr.open_dataset(var_nc, engine='netcdf4').load()
+    return final_datasets
