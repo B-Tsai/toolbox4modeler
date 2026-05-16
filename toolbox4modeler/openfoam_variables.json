@@ -1,64 +1,111 @@
 {
     "__types__": {
-        "scalar": {"components": 1, "suffixes": []},
-        "vector": {"components": 3, "suffixes": ["x", "y", "z"]},
-        "symmTensor": {"components": 6, "suffixes": ["xx", "xy", "xz", "yy", "yz", "zz"]},
-        "tensor": {"components": 9, "suffixes": ["xx", "xy", "xz", "yx", "yy", "yz", "zx", "zy", "zz"]},
-        "sphericalTensor": {"components": 1, "suffixes": ["ii"]},
-        "bool": {"components": 1, "suffixes": []}
+        "scalar": {
+            "components": 1,
+            "suffixes": []
+        },
+        "vector": {
+            "components": 3,
+            "suffixes": [
+                "x",
+                "y",
+                "z"
+            ]
+        },
+        "symmTensor": {
+            "components": 6,
+            "suffixes": [
+                "xx",
+                "xy",
+                "xz",
+                "yy",
+                "yz",
+                "zz"
+            ]
+        },
+        "tensor": {
+            "components": 9,
+            "suffixes": [
+                "xx",
+                "xy",
+                "xz",
+                "yx",
+                "yy",
+                "yz",
+                "zx",
+                "zy",
+                "zz"
+            ]
+        },
+        "sphericalTensor": {
+            "components": 1,
+            "suffixes": [
+                "ii"
+            ]
+        },
+        "bool": {
+            "components": 1,
+            "suffixes": []
+        }
     },
     "alpha.water": {
-        "standard_name": "sea_water_volume_fraction",
+        "standard_name": "volume_fraction_of_water",
         "units": "1",
         "openfoam_type": "scalar"
     },
     "p": {
-        "standard_name": "sea_water_pressure",
+        "standard_name": "pressure",
         "units": "Pa",
         "openfoam_type": "scalar"
     },
     "p_rgh": {
-        "standard_name": "sea_water_dynamic_pressure",
+        "standard_name": "dynamic_pressure",
         "units": "Pa",
         "openfoam_type": "scalar"
     },
     "k": {
-        "standard_name": "specific_turbulent_kinetic_energy_of_sea_water",
+        "standard_name": "turbulent_kinetic_energy",
         "units": "m2 s-2",
         "openfoam_type": "scalar"
     },
     "omega": {
-        "standard_name": "specific_turbulent_dissipation_rate",
+        "standard_name": "specific_rate_of_turbulent_kinetic_energy_dissipation",
         "units": "s-1",
         "openfoam_type": "scalar"
     },
     "epsilon": {
-        "standard_name": "specific_turbulent_kinetic_energy_dissipation_in_sea_water",
+        "standard_name": "turbulent_kinetic_energy_dissipation",
         "units": "m2 s-3",
         "openfoam_type": "scalar"
     },
     "nut": {
-        "standard_name": "kinematic_eddy_viscosity",
+        "standard_name": "kinematic_turbulent_viscosity",
         "units": "m2 s-1",
         "openfoam_type": "scalar"
     },
     "nuTilda": {
-        "standard_name": "modified_turbulent_viscosity",
+        "standard_name": "modified_kinematic_turbulent_viscosity",
         "units": "m2 s-1",
         "openfoam_type": "scalar"
     },
     "U": {
-        "standard_name": "sea_water_velocity",
+        "standard_name": "velocity",
         "units": "m s-1",
         "openfoam_type": "vector",
         "components": {
-            "x": {"standard_name": "x_sea_water_velocity"},
-            "y": {"standard_name": "y_sea_water_velocity"},
-            "z": {"standard_name": "upward_sea_water_velocity"}
+            "x": {
+                "standard_name": "x_velocity"
+            },
+            "y": {
+                "standard_name": "y_velocity"
+            },
+            "z": {
+                "standard_name": "z_velocity"
+            }
         }
     },
     "R": {
-        "standard_name": "reynolds_stress_tensor",
+        "standard_name": "reynolds_stress",
         "units": "m2 s-2",
         "openfoam_type": "symmTensor"
     }
