@@ -65,8 +65,8 @@ def _process_openfoam_time_step(foam_file_path, t_idx, t_val, var_shapes, var_su
 
 def openfoam_to_netcdf(
     case_dir: str,
-    output_dir: Optional[str] = None,
     variables: List[str],
+    output_dir: Optional[str] = None,
     include_boundaries: bool = False,
     max_workers: Optional[int] = None
 ) -> dict:
